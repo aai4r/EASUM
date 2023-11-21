@@ -18,44 +18,23 @@ from tqdm import tqdm
 
 from transformers import ConvBertTokenizer, get_linear_schedule_with_warmup
 from transformers.optimization import AdamW
-from convbert import MAG_ConvBertForSequenceClassification_DS, MAG_ConvBertForSequenceClassification_DG, ConvBertForSequenceClassification
+from bert import MAG_BertForSequenceClassification
 
 from argparse_utils import str2bool, seed
+from data_loader import create_data
 from global_configs import *
-from loss import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str,
-                    choices=["mosi", "mosei, iemocap, meld"], default="meld")
-parser.add_argument("--max_seq_length", type=int, default=40)
-parser.add_argument("--train_batch_size", type=int, default=48)
-parser.add_argument("--dev_batch_size", type=int, default=128)
-parser.add_argument("--test_batch_size", type=int, default=128)
-parser.add_argument("--n_epochs", type=int, default=100)
+parser.add_argument("--train_batch_size", type=int, default=32)
+parser.add_argument("--dev_batch_size", type=int, default=32)
+parser.add_argument("--n_epochs", type=int, default=50)
 parser.add_argument("--beta_shift", type=float, default=1.0)
 parser.add_argument("--dropout_prob", type=float, default=0.5)
-parser.add_argument("--num_heads", type=int, default=8)
-parser.add_argument("--layers", type=int, default=4)
-parser.add_argument("--attn_dropout", type=int, default=0.1)
-parser.add_argument("--relu_dropout", type=float, default=0.1)
-parser.add_argument("--res_dropout", type=float, default=0.1)
-parser.add_argument("--embed_dropout", type=float, default=0.25)
-parser.add_argument("--attn_mask", type=bool, default=True)
-parser.add_argument("--fusion_dim", type=int, default=128)
-parser.add_argument("--fusion_dropout", type=float, default=0.1)
-parser.add_argument("--text_dropout", type=float, default=0.1)
-parser.add_argument("--audio_dropout", type=float, default=0.1)
-parser.add_argument("--video_dropout", type=float, default=0.1)
-parser.add_argument("--out_dropout", type=float, default=0.1)
-parser.add_argument("--post_text_dim", type=int, default=64)
-parser.add_argument("--post_audio_dim", type=int, default=32)
-parser.add_argument("--post_video_dim", type=int, default=32)
 parser.add_argument("--learning_rate", type=float, default=1e-5)
 parser.add_argument("--gradient_accumulation_step", type=int, default=1)
 parser.add_argument("--warmup_proportion", type=float, default=0.1)
-parser.add_argument("--seed", type=seed, default=2897)
-# parser.add_argument("--seed", type=seed, default='random')
-parser.add_argument("--save_path", type=str, default="./checkpoint/model_DS_meld_6c_2897.pt")
+parser.add_argument("--seed", type=seed, default='random')
+parser.add_argument("--save_path", type=str, default="./checkpoint/model.pt")
 
 pwd = os.path.abspath(__file__)
 logging.basicConfig(
@@ -71,68 +50,9 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 args = parser.parse_args()
 
 
-class Multimodal_Datasets(Dataset):
-    def __init__(self, data):
-        super(Multimodal_Datasets, self).__init__()
-        self.tokenizer = ConvBertTokenizer.from_pretrained('YituTech/conv-bert-base')
-        self.text = data['text']
-        self.video = data['video']
-        self.audio = data['audio']
-        self.label = data['label']
-        # self.text = data['text'][:100]
-        # self.video = data['video'][:100]
-        # self.audio = data['audio'][:100]
-        # self.label = data['label'][:100]
-
-    def prepare_bert_input(self, text):
-        input_ids = self.tokenizer.encode_plus(text[0])['input_ids']
-        segment_ids = self.tokenizer.encode_plus(text[0])['token_type_ids']
-        attention_mask = self.tokenizer.encode_plus(text[0])['attention_mask']
-        if len(input_ids) < args.max_seq_length:
-            input_ids.extend([0] * (args.max_seq_length - len(input_ids)))
-            segment_ids.extend([0] * (args.max_seq_length - len(segment_ids)))
-            attention_mask.extend([0] * (args.max_seq_length - len(attention_mask)))
-        else:
-            input_ids = input_ids[:args.max_seq_length]
-            segment_ids = segment_ids[:args.max_seq_length]
-            attention_mask = attention_mask[:args.max_seq_length]
-        return np.array(input_ids), np.array(attention_mask), np.array(segment_ids)
-
-    def __getitem__(self, index):
-        input_ids, attention_mask, segment_ids = self.prepare_bert_input(self.text[index])
-        input_dict = {
-            'audio': torch.tensor(self.audio[index]),
-            'vision': torch.tensor(self.video[index]),
-            'input_ids': torch.tensor(input_ids),
-            'segment_ids': torch.tensor(segment_ids),
-            'attention_mask': torch.tensor(attention_mask),
-            'annotations': torch.tensor(self.label[index])
-        }
-        return input_dict
-
-    def __len__(self):
-        return len(self.text)
-
-
-def set_up_data_loader(dataset):
-    if dataset == 'meld':
-        file = open("./datasets_new/data/meld_6.pkl", "rb")
-    elif dataset == 'iemocap':
-        file = open("./datasets_new/data/iemocap_6.pkl", "rb")
-    elif dataset == 'mosi':
-        file = open("./datasets_new/data/mosi.pkl", "rb")
-    elif dataset == 'mosei':
-        file = open("./datasets_new/data/mosei.pkl", "rb")
-
-    data = pickle.load(file)
-
-    train_data = data["train"]
-    dev_data = data["valid"]
-    test_data = data["test"]
-
-    train_dataset = Multimodal_Datasets(train_data)
-    dev_dataset = Multimodal_Datasets(dev_data)
-    test_dataset = Multimodal_Datasets(test_data)
+def set_up_data_loader(data_path):
+    train_dataset = create_data(data_path, data_num=['003', '006', '007', '015', '018', '040'])
+    dev_dataset = create_data(data_path, data_num=['041'])
 
     num_train_optimization_steps = (
         int(
@@ -150,14 +70,9 @@ def set_up_data_loader(dataset):
         dev_dataset, batch_size=args.dev_batch_size, shuffle=True
     )
 
-    test_dataloader = DataLoader(
-        test_dataset, batch_size=args.test_batch_size, shuffle=True,
-    )
-
     return (
         train_dataloader,
         dev_dataloader,
-        test_dataloader,
         num_train_optimization_steps,
     )
 
@@ -192,27 +107,18 @@ class MultimodalConfig(object):
         self.dropout_prob = dropout_prob
 
 
-def prep_for_training(num_train_optimization_steps: int, load_path):
+def prep_for_training(num_train_optimization_steps: int):
     multimodal_config = MultimodalConfig(
         beta_shift=args.beta_shift, dropout_prob=args.dropout_prob
     )
-    model_DG = MAG_ConvBertForSequenceClassification_DG.from_pretrained(
-        'YituTech/conv-bert-base', multimodal_config=multimodal_config,
+    model = MAG_BertForSequenceClassification.from_pretrained(
+        'kykim/bert-kor-base', multimodal_config=multimodal_config,
     )
-    # model_DG = ConvBertForSequenceClassification.from_pretrained(
-    #     'YituTech/conv-bert-base'
-    # )
-    model_DS = MAG_ConvBertForSequenceClassification_DS.from_pretrained(
-        'YituTech/conv-bert-base', multimodal_config=multimodal_config,
-    )
-    checkpoint = torch.load(load_path)
-    model_DG.load_state_dict(checkpoint['model_state_dict'])
-    model_DS = load_model(model_DS, model_DG)
-    model_DG.to(DEVICE)
-    model_DS.to(DEVICE)
+    # model_bert = BertModel.from_pretrained("kykim/bert-kor-base")
+    model.to(DEVICE)
 
     # Prepare optimizer
-    model_param_optimizer = list(model_DS.named_parameters())
+    model_param_optimizer = list(model.named_parameters())
     no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
@@ -235,7 +141,7 @@ def prep_for_training(num_train_optimization_steps: int, load_path):
         num_warmup_steps=num_train_optimization_steps,
         num_training_steps=args.warmup_proportion * num_train_optimization_steps,
     )
-    return model_DS, model_DG, optimizer, scheduler
+    return model, optimizer, scheduler
 
 
 def calc_loss(logits, label, aux_logits=None, logits_DG=None):
@@ -414,8 +320,7 @@ def test_score_model(model: nn.Module, model_DG: nn.Module, test_dataloader: Dat
 
 
 def train(
-    model_DS,
-    model_DG,
+    model,
     train_dataloader,
     validation_dataloader,
     test_data_loader,
@@ -465,31 +370,28 @@ def train(
             print("*****************MODEL SAVED*****************")
 
 
-def main(dataset):
-    # set_random_seed(2897)
+def main(data_path):
     set_random_seed(args.seed)
     logger.info("seed:{}".format(args.seed))
 
     (
         train_data_loader,
         dev_data_loader,
-        test_data_loader,
         num_train_optimization_steps,
-    ) = set_up_data_loader(dataset)
+    ) = set_up_data_loader(data_path)
 
-    model_DS, model_DG, optimizer, scheduler = prep_for_training(
-        num_train_optimization_steps, load_path='./checkpoint/convbert_TAV_0.05.pt')
+    model, optimizer, scheduler = prep_for_training(
+        num_train_optimization_steps)
 
     train(
-        model_DS,
-        model_DG,
+        model,
         train_data_loader,
         dev_data_loader,
-        test_data_loader,
         optimizer,
         scheduler,
     )
 
 
 if __name__ == "__main__":
-    main(args.dataset)
+    data_path = "/home/yewon/ssd2/ai31/sentiment_analysis/Korean/audiotextvision-transformer/data/korean_multimodal_dataset/"
+    main(data_path)

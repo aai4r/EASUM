@@ -9,16 +9,19 @@ import torch
 import torchvision
 from torch.utils.data.dataset import Dataset
 from facenet_pytorch import MTCNN, InceptionResnetV1
+from transformers import BertTokenizerFast, BertModel
 
 
 class create_data(Dataset):
-    def __init__(self, data_path):
+    def __init__(self, data_path, data_num):
         super(create_data, self).__init__()
         self.data_path = data_path
+        self.max_len = 40
+        self.tokenizer = BertTokenizerFast.from_pretrained("kykim/bert-kor-base")
         self.resnet = InceptionResnetV1(pretrained='vggface2').eval()
         self.mtcnn = MTCNN(image_size=160, margin=0)
         self.video_list = []
-        for vid in ['006', '040']:
+        for vid in data_num:
             for f in glob.glob(os.path.join(self.data_path, vid, "movie/*.m2ts")):
                 self.video_list.append(f)
         for dir in ['mp4', 'wav', 'jpg', 'cropped']:
@@ -102,14 +105,37 @@ class create_data(Dataset):
         label = float(self.contents[num-1].split(" ")[-1].strip())
         return label
 
+    def prepare_bert_input(self, text):
+        input_ids = self.tokenizer.encode_plus(text[0])['input_ids']
+        segment_ids = self.tokenizer.encode_plus(text[0])['token_type_ids']
+        attention_mask = self.tokenizer.encode_plus(text[0])['attention_mask']
+        if len(input_ids) < self.max_len:
+            input_ids.extend([0] * (self.max_len - len(input_ids)))
+            segment_ids.extend([0] * (self.max_len - len(segment_ids)))
+            attention_mask.extend([0] * (self.max_len - len(attention_mask)))
+        else:
+            input_ids = input_ids[:self.max_len]
+            segment_ids = segment_ids[:self.max_len]
+            attention_mask = attention_mask[:self.max_len]
+        return np.array(input_ids), np.array(attention_mask), np.array(segment_ids)
+
     def __len__(self):
         return len(self.video_list)
 
     def __getitem__(self, idx):
         selected_video = self.video_list[idx]
         text, img_feat, audio_feat = self.extract_feat(selected_video)
+        input_ids, attention_mask, segment_ids = self.prepare_bert_input(text)
         label = self.get_label(selected_video)
-        return text, img_feat, audio_feat, label
+        input_dict = {
+            'audio': audio_feat,
+            'vision': img_feat,
+            'input_ids': torch.tensor(input_ids),
+            'segment_ids': torch.tensor(segment_ids),
+            'attention_mask': torch.tensor(attention_mask),
+            'annotations': torch.tensor([[label]])
+        }
+        return input_dict
 
 
 if __name__ == "__main__":
