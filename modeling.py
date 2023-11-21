@@ -11,11 +11,6 @@ class MAG(nn.Module):
                 beta_shift, dropout_prob
             )
         )
-
-        # if dataset == 'mosi':
-        #     VISUAL_DIM = mosi_visual_dim
-        # elif dataset == 'mosei':
-        #     VISUAL_DIM = visual_dim
         self.W_hv = nn.Linear(VISUAL_DIM + TEXT_DIM, TEXT_DIM)
         self.W_ha = nn.Linear(ACOUSTIC_DIM + TEXT_DIM, TEXT_DIM)
 
