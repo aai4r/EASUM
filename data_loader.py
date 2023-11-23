@@ -1,14 +1,7 @@
-import pickle
 import numpy as np
 import torch
 from torch.utils.data.dataset import Dataset
-from torch.utils.data import DataLoader
 from transformers import BertTokenizerFast
-
-
-train_batch_size, dev_batch_size = 2, 2
-gradient_accumulation_step = 1
-n_epochs = 5
 
 
 class create_dataset(Dataset):
@@ -62,54 +55,10 @@ class create_dataset(Dataset):
         return len(self.text)
 
 
-def set_up_data_loader():
+if __name__ == "__main__":
+    import pickle
     train_file = open("./train.pkl", "rb")
     train_d = pickle.load(train_file)
-
-    dev_file = open("./val.pkl", "rb")
-    dev_d = pickle.load(dev_file)
-
     train_data = train_d["train"]
-    dev_data = dev_d["val"]
-
     train_dataset = create_dataset(train_data)
-    dev_dataset = create_dataset(dev_data)
-
-    num_train_optimization_steps = (
-            int(
-                len(train_dataset) / train_batch_size /
-                gradient_accumulation_step
-            )
-            * n_epochs
-    )
-
-    train_dataloader = DataLoader(
-        train_dataset, batch_size=train_batch_size, shuffle=True
-    )
-
-    dev_dataloader = DataLoader(
-        dev_dataset, batch_size=dev_batch_size, shuffle=True
-    )
-
-    return (
-        train_dataloader,
-        dev_dataloader,
-        num_train_optimization_steps,
-    )
-
-
-if __name__ == "__main__":
-    (
-        train_dataloader,
-        dev_dataloader,
-        num_train_optimization_steps,
-    ) = set_up_data_loader()
-    for step, batch in enumerate(train_dataloader):
-        acoustic = batch['audio']
-        visual = batch['video']
-        input_ids = batch['input_ids']
-        segment_ids = batch['segment_ids']
-        attention_mask = batch['attention_mask']
-        label_ids = batch['label']
-        if step == 1:
-            break
+    print(len(train_dataset))
