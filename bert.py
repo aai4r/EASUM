@@ -24,7 +24,6 @@ from transformers.modeling_utils import (
     prune_linear_layer,
 )
 from modeling import MAG
-from SEmodule import SELayer
 
 from global_configs import TEXT_DIM, ACOUSTIC_DIM, VISUAL_DIM, DEVICE
 
@@ -84,12 +83,10 @@ class MAG_BertModel(BertPreTrainedModel):
         self.embeddings = BertEmbeddings(config)
         self.encoder = BertEncoder(config)
         self.pooler = BertPooler(config)
-        # self.SE = SELayer(768,74,47)
         self.MAG = MAG(
             config.hidden_size,
             multimodal_config.beta_shift,
             multimodal_config.dropout_prob,
-            dataset='mosi'
         )
 
         self.init_weights()
@@ -122,7 +119,6 @@ class MAG_BertModel(BertPreTrainedModel):
         encoder_attention_mask=None,
         output_attentions=None,
         output_hidden_states=None,
-        aug=None
     ):
         r"""
     Return:
@@ -220,27 +216,6 @@ class MAG_BertModel(BertPreTrainedModel):
             token_type_ids=token_type_ids,
             inputs_embeds=inputs_embeds,
         )
-        # SE
-        # import pdb; pdb.set_trace()
-        # embedding_output, visual, acoustic = self.SE(embedding_output, acoustic, visual)
-        # Early fusion with MAG
-        """aug"""
-        if aug is not None:
-            for i, data in enumerate(embedding_output[aug == True]):
-                zero_out = random.sample(list(range(embedding_output.shape[1])), 5)
-                temp = embedding_output[aug == True]
-                temp[i][zero_out] = 0
-                embedding_output[aug == True] = temp
-            for i, data in enumerate(visual[aug == True]):
-                zero_out = random.sample(list(range(visual.shape[1])), 5)
-                temp = visual[aug == True]
-                temp[i][zero_out] = 0
-                visual[aug == True] = temp
-            for i, data in enumerate(acoustic[aug == True]):
-                zero_out = random.sample(list(range(acoustic.shape[1])), 5)
-                temp = acoustic[aug == True]
-                temp[i][zero_out] = 0
-                acoustic[aug == True] = temp
 
         fused_embedding = self.MAG(embedding_output, visual, acoustic)
 
@@ -271,8 +246,7 @@ class MAG_BertForSequenceClassification(BertPreTrainedModel):
 
         self.bert = MAG_BertModel(config, multimodal_config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier_sent = nn.Linear(config.hidden_size, config.num_labels)
-        self.classifier_emo = nn.Linear(config.hidden_size, 6)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         self.init_weights()
 
@@ -289,7 +263,6 @@ class MAG_BertForSequenceClassification(BertPreTrainedModel):
         labels=None,
         output_attentions=None,
         output_hidden_states=None,
-        aug=None
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`, defaults to :obj:`None`):
@@ -328,29 +301,24 @@ class MAG_BertForSequenceClassification(BertPreTrainedModel):
             inputs_embeds=inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            aug=aug
         )
 
-        # import pdb;
-        # pdb.set_trace()
         pooled_output = outputs[1]
 
         pooled_output = self.dropout(pooled_output)
-        logits_sent = self.classifier_sent(pooled_output)
-        logits_emo = self.classifier_emo(pooled_output)
-        outputs_sent = (logits_sent,) + outputs[
+        logits = self.classifier(pooled_output)
+        outputs = (logits,) + outputs[
             2:
         ]  # add hidden states and attention if they are here
-        outputs_emo = (logits_emo,) + outputs[2:]
 
-        # if labels is not None:
-        #     if self.num_labels == 1:
-        #         #  We are doing regression
-        #         loss_fct = MSELoss()
-        #         loss = loss_fct(logits.view(-1), labels.view(-1))
-        #     else:
-        #         loss_fct = CrossEntropyLoss()
-        #         loss = loss_fct(
-        #             logits.view(-1, self.num_labels), labels.view(-1))
-        #     outputs = (loss,) + outputs
-        return outputs_sent, outputs_emo
+        if labels is not None:
+            if self.num_labels == 1:
+                #  We are doing regression
+                loss_fct = MSELoss()
+                loss = loss_fct(logits.view(-1), labels.view(-1))
+            else:
+                loss_fct = CrossEntropyLoss()
+                loss = loss_fct(
+                    logits.view(-1, self.num_labels), labels.view(-1))
+            outputs = (loss,) + outputs
+        return outputs
