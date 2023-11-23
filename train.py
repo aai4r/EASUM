@@ -4,6 +4,7 @@ import argparse
 import random
 import logging
 import sys
+import pickle
 import numpy as np
 from pathlib import Path
 
@@ -16,8 +17,8 @@ from transformers import get_linear_schedule_with_warmup
 from transformers.optimization import AdamW
 from bert import MAG_BertForSequenceClassification
 
-from argparse_utils import str2bool, seed
-from data_loader import set_up_data_loader
+from argparse_utils import seed
+from data_loader import create_dataset
 from global_configs import *
 
 parser = argparse.ArgumentParser()
@@ -65,6 +66,42 @@ class MultimodalConfig(object):
     def __init__(self, beta_shift, dropout_prob):
         self.beta_shift = beta_shift
         self.dropout_prob = dropout_prob
+
+
+def set_up_data_loader():
+    train_file = open("./train.pkl", "rb")
+    train_d = pickle.load(train_file)
+
+    dev_file = open("./val.pkl", "rb")
+    dev_d = pickle.load(dev_file)
+
+    train_data = train_d["train"]
+    dev_data = dev_d["val"]
+
+    train_dataset = create_dataset(train_data)
+    dev_dataset = create_dataset(dev_data)
+
+    num_train_optimization_steps = (
+            int(
+                len(train_dataset) / args.train_batch_size /
+                args.gradient_accumulation_step
+            )
+            * args.n_epochs
+    )
+
+    train_dataloader = DataLoader(
+        train_dataset, batch_size=args.train_batch_size, shuffle=True
+    )
+
+    dev_dataloader = DataLoader(
+        dev_dataset, batch_size=args.dev_batch_size, shuffle=True
+    )
+
+    return (
+        train_dataloader,
+        dev_dataloader,
+        num_train_optimization_steps,
+    )
 
 
 def prep_for_training(num_train_optimization_steps: int):
