@@ -6,10 +6,9 @@ import librosa
 from PIL import Image
 import numpy as np
 import torch
-import torchvision
 from torch.utils.data.dataset import Dataset
 from facenet_pytorch import MTCNN, InceptionResnetV1
-from transformers import BertTokenizerFast, BertModel
+from transformers import BertTokenizerFast
 
 
 class create_dataset(Dataset):
