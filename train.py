@@ -23,7 +23,7 @@ from global_configs import *
 parser = argparse.ArgumentParser()
 parser.add_argument("--train_batch_size", type=int, default=32)
 parser.add_argument("--dev_batch_size", type=int, default=32)
-parser.add_argument("--n_epochs", type=int, default=5)
+parser.add_argument("--n_epochs", type=int, default=40)
 parser.add_argument("--beta_shift", type=float, default=1.0)
 parser.add_argument("--dropout_prob", type=float, default=0.5)
 parser.add_argument("--learning_rate", type=float, default=1e-5)
@@ -61,15 +61,6 @@ def set_random_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 
-def load_model(model_DS, model_DG):
-    model_dict = model_DS.state_dict()
-    pretrained_dict = model_DG.state_dict()
-    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-    model_dict.update(pretrained_dict)
-    model_DS.load_state_dict(model_dict)
-    return model_DS
-
-
 class MultimodalConfig(object):
     def __init__(self, beta_shift, dropout_prob):
         self.beta_shift = beta_shift
@@ -83,7 +74,6 @@ def prep_for_training(num_train_optimization_steps: int):
     model = MAG_BertForSequenceClassification.from_pretrained(
         'kykim/bert-kor-base', multimodal_config=multimodal_config, num_labels=1,
     )
-    # model_bert = BertModel.from_pretrained("kykim/bert-kor-base")
     model.to(DEVICE)
 
     # Prepare optimizer
