@@ -22,9 +22,9 @@ class create_dataset(Dataset):
         self.label = data['label']
 
     def prepare_bert_input(self, text):
-        input_ids = self.tokenizer.encode_plus(text[0])['input_ids']
-        segment_ids = self.tokenizer.encode_plus(text[0])['token_type_ids']
-        attention_mask = self.tokenizer.encode_plus(text[0])['attention_mask']
+        input_ids = self.tokenizer.encode_plus(text)['input_ids']
+        segment_ids = self.tokenizer.encode_plus(text)['token_type_ids']
+        attention_mask = self.tokenizer.encode_plus(text)['attention_mask']
         if len(input_ids) < self.max_len:
             input_ids.extend([0] * (self.max_len - len(input_ids)))
             segment_ids.extend([0] * (self.max_len - len(segment_ids)))
