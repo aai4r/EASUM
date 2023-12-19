@@ -117,14 +117,13 @@ def test(model: nn.Module, test_dataloader: DataLoader):
                 pred = "긍정"
             print("********Predicted Sentiment: {}********".format(pred))
             print("\n")
-            # cause_pred = tokenizer.decode(batch['input_ids'][0][start_pred:end_pred])
             print("Cause Prediction: {}".format(cause_pred))
             mainWin = Sentiment_Window(sentiment=pred, cause=cause_pred)
             mainWin.show()
 
 
 def main(data_path, model_path):
-    # set_random_seed(args.seed)
+    set_random_seed(args.seed)
     logger.info("seed:{}".format(args.seed))
     test_data_loader = set_up_data_loader(data_path=data_path)
     model = load_model(path=model_path)
