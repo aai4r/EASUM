@@ -3,12 +3,12 @@ import cv2
 import glob
 import whisper
 import librosa
-from PIL import Image
 import numpy as np
+from PIL import Image
 import torch
 from torch.utils.data.dataset import Dataset
 from facenet_pytorch import MTCNN, InceptionResnetV1
-from transformers import BertTokenizerFast
+from transformers import BertTokenizerFast, BertTokenizer
 
 
 class create_dataset(Dataset):
@@ -17,14 +17,18 @@ class create_dataset(Dataset):
         self.data_path = data_path
         self.max_len = 40
         self.tokenizer = BertTokenizerFast.from_pretrained("kykim/bert-kor-base")
+        self.cause_tokenizer = BertTokenizer.from_pretrained("beomi/kcbert-base")
         self.resnet = InceptionResnetV1(pretrained='vggface2').eval()
         self.mtcnn = MTCNN(image_size=160, margin=0, thresholds=[0.3, 0.3, 0.3])
         self.video_list = []
-        for f in glob.glob(os.path.join(self.data_path, "*")):
+        for f in glob.glob(os.path.join(self.data_path, "*.mp4")):
             self.video_list.append(f)
         for dir in ['wav', 'jpg', 'cropped']:
             if not os.path.exists(dir):
                 os.makedirs(dir)
+
+    def play_video(self, path):
+        os.system("xdg-open %s" % path)
 
     def extract_feat(self, file):
         img_feat = self.vid2img_embed(file)
@@ -32,6 +36,7 @@ class create_dataset(Dataset):
         wav_f = './wav/' + file_name.split('.')[0] + '.wav'
         self.video2wav(file, wav_f)
         text = self.stt(wav_f)
+        text = text.replace(",", "")
         audio_feat = self.audio_FE(wav_f)
         return text, img_feat, audio_feat
 
@@ -99,6 +104,21 @@ class create_dataset(Dataset):
             attention_mask = attention_mask[:self.max_len]
         return np.array(input_ids), np.array(attention_mask), np.array(segment_ids)
 
+    def prepare_cause_bert_input(self, text):
+        data = {'context': [], 'question': []}
+        data['context'].append(text)
+        data['question'].append('내 감정의 원인이 무엇입니까?')
+        tokenized_data = self.cause_tokenizer(
+            data["question"],
+            data["context"],
+            max_length=128,
+            truncation="only_second",
+            padding="max_length"
+        )
+        cause_input_ids = tokenized_data['input_ids'][0]
+        cause_attention_mask = tokenized_data['attention_mask'][0]
+        return cause_input_ids, cause_attention_mask
+
     def collate(self, data):
         if len(data) < self.max_len:
             seq_len, dim = data.shape[0], data.shape[1]
@@ -114,8 +134,10 @@ class create_dataset(Dataset):
 
     def __getitem__(self, idx):
         selected_video = self.video_list[idx]
+        self.play_video(selected_video)
         text, img_feat, audio_feat = self.extract_feat(selected_video)
         input_ids, attention_mask, segment_ids = self.prepare_bert_input(text)
+        cause_input_ids, cause_attention_mask = self.prepare_cause_bert_input(text)
         video, audio = self.collate(img_feat), self.collate(audio_feat)
         input_dict = {
             'audio': audio,
@@ -123,6 +145,9 @@ class create_dataset(Dataset):
             'input_ids': torch.tensor(input_ids),
             'segment_ids': torch.tensor(segment_ids),
             'attention_mask': torch.tensor(attention_mask),
+            'cause_input_ids': torch.tensor(cause_input_ids),
+            'cause_attention_mask': torch.tensor(cause_attention_mask),
+            'text': text
         }
         return input_dict
 

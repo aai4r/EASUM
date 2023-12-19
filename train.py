@@ -17,21 +17,21 @@ from transformers import get_linear_schedule_with_warmup
 from transformers.optimization import AdamW
 from bert import MAG_BertForSequenceClassification
 
-from argparse_utils import seed
+from utils import seed
 from data_loader import create_dataset
 from global_configs import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--train_batch_size", type=int, default=32)
 parser.add_argument("--dev_batch_size", type=int, default=32)
-parser.add_argument("--n_epochs", type=int, default=40)
+parser.add_argument("--n_epochs", type=int, default=50)
 parser.add_argument("--beta_shift", type=float, default=1.0)
 parser.add_argument("--dropout_prob", type=float, default=0.5)
 parser.add_argument("--learning_rate", type=float, default=1e-5)
 parser.add_argument("--gradient_accumulation_step", type=int, default=1)
 parser.add_argument("--warmup_proportion", type=float, default=0.1)
 parser.add_argument("--seed", type=seed, default='random')
-parser.add_argument("--save_path", type=str, default="./checkpoint/model.pt")
+parser.add_argument("--save_path", type=str, default="./checkpoint/model_cls.pt")
 
 pwd = os.path.abspath(__file__)
 logging.basicConfig(
@@ -69,7 +69,7 @@ class MultimodalConfig(object):
 
 
 def set_up_data_loader():
-    train_file = open("./train.pkl", "rb")
+    train_file = open("./train_comb.pkl", "rb")
     train_d = pickle.load(train_file)
 
     dev_file = open("./val.pkl", "rb")
@@ -109,7 +109,7 @@ def prep_for_training(num_train_optimization_steps: int):
         beta_shift=args.beta_shift, dropout_prob=args.dropout_prob
     )
     model = MAG_BertForSequenceClassification.from_pretrained(
-        'kykim/bert-kor-base', multimodal_config=multimodal_config, num_labels=1,
+        'kykim/bert-kor-base', multimodal_config=multimodal_config, num_labels=3,
     )
     model.to(DEVICE)
 
@@ -153,8 +153,10 @@ def train_epoch(model: nn.Module, train_dataloader: DataLoader, optimizer, sched
         label_ids = batch['label'].to(DEVICE)
         outputs = model(input_ids, visual, acoustic.float(), attention_mask, segment_ids)
         logits = outputs[0]
-        loss_fct = nn.MSELoss()
-        loss = loss_fct(logits.view(-1), label_ids.view(-1))
+        # loss_fct = nn.MSELoss()
+        # loss = loss_fct(logits.view(-1), label_ids.view(-1))
+        loss_fct = nn.CrossEntropyLoss()
+        loss = loss_fct(logits, label_ids)
 
         if args.gradient_accumulation_step > 1:
             loss = loss / args.gradient_accumulation_step
@@ -188,8 +190,10 @@ def eval_epoch(model: nn.Module, dev_dataloader: DataLoader):
             outputs = model(input_ids, visual, acoustic.float(), attention_mask, segment_ids)
             logits = outputs[0]
 
-            loss_fct = nn.MSELoss()
-            loss = loss_fct(logits.view(-1), label_ids.view(-1))
+            # loss_fct = nn.MSELoss()
+            # loss = loss_fct(logits.view(-1), label_ids.view(-1))
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(logits, label_ids)
 
             if args.gradient_accumulation_step > 1:
                 loss = loss / args.gradient_accumulation_step
