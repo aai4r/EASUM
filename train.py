@@ -153,10 +153,10 @@ def train_epoch(model: nn.Module, train_dataloader: DataLoader, optimizer, sched
         label_ids = batch['label'].to(DEVICE)
         outputs = model(input_ids, visual, acoustic.float(), attention_mask, segment_ids)
         logits = outputs[0]
-        # loss_fct = nn.MSELoss()
-        # loss = loss_fct(logits.view(-1), label_ids.view(-1))
-        loss_fct = nn.CrossEntropyLoss()
-        loss = loss_fct(logits, label_ids)
+        loss_fct = nn.MSELoss()
+        loss = loss_fct(logits.view(-1), label_ids.view(-1))
+        # loss_fct = nn.CrossEntropyLoss()
+        # loss = loss_fct(logits, label_ids)
 
         if args.gradient_accumulation_step > 1:
             loss = loss / args.gradient_accumulation_step
@@ -190,10 +190,8 @@ def eval_epoch(model: nn.Module, dev_dataloader: DataLoader):
             outputs = model(input_ids, visual, acoustic.float(), attention_mask, segment_ids)
             logits = outputs[0]
 
-            # loss_fct = nn.MSELoss()
-            # loss = loss_fct(logits.view(-1), label_ids.view(-1))
-            loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(logits, label_ids)
+            loss_fct = nn.MSELoss()
+            loss = loss_fct(logits.view(-1), label_ids.view(-1))
 
             if args.gradient_accumulation_step > 1:
                 loss = loss / args.gradient_accumulation_step
