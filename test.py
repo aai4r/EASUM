@@ -19,7 +19,7 @@ from transformers import BertTokenizer, BertForQuestionAnswering
 from utils import seed, Sentiment_Window
 from global_configs import DEVICE
 from test_loader import create_dataset
-from train_cause_model import test_cause
+from cause_model import test_cause
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--max_seq_length", type=int, default=40)
