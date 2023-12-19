@@ -108,8 +108,6 @@ def test(model: nn.Module, test_dataloader: DataLoader):
             outputs = model(input_ids, visual, acoustic.float(), attention_mask, segment_ids)
             logits = outputs[0]
             cause_pred = test_cause(cause_input_ids, attention_mask=cause_attention_mask)
-            # start_pred = torch.argmax(cause_outputs['start_logits'], dim=1)
-            # end_pred = torch.argmax(cause_outputs['end_logits'], dim=1)
             print("pred: {}".format(logits))
             if logits < 0:
                 pred = "부정"
