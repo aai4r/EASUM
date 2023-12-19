@@ -55,7 +55,7 @@ class create_dataset(Dataset):
             'input_ids': torch.tensor(input_ids),
             'segment_ids': torch.tensor(segment_ids),
             'attention_mask': torch.tensor(attention_mask),
-            'label': self.convert_label(self.label[index])
+            'label': self.label[index]
         }
         return input_dict
 
