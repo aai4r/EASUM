@@ -10,11 +10,6 @@ tokenizer = BertTokenizer.from_pretrained("beomi/kcbert-base")
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
-"""
-여기 커피가 너무 맛있다 너무 고소해
-여기 책상이 너무 더러운 데 우리 다른 데로 옮길까?
-"""
-
 class CustomDataset(Dataset):
     def __init__(self, file_name):
         self.input_file = csv.DictReader(open(file_name))
@@ -64,7 +59,7 @@ class CustomDataset(Dataset):
 
 train_file_name = "food_review_train2.csv"
 test_file_name = "food_review_test2.csv"
-# train_dataset = CustomDataset(train_file_name)
+train_dataset = CustomDataset(train_file_name)
 test_dataset = CustomDataset(test_file_name)
 PATH = './checkpoint/cause_model.pt'
 
@@ -136,8 +131,9 @@ def test_cause(input_ids, attention_mask):
         return cause_pred
 
 
-# train_model(epochs=3)
-# test()
+if __name__ == "__main__":
+    train_model(epochs=3)
+    test()
 
 
 
