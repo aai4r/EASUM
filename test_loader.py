@@ -155,3 +155,4 @@ class create_dataset(Dataset):
 if __name__ == "__main__":
     train_data = create_dataset(data_path="./test_videos")
     print(train_data[1])
+    
