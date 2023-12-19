@@ -35,6 +35,6 @@ def seed(s):
 class Sentiment_Window(QMainWindow):
     def __init__(self, sentiment, cause):
         QMainWindow.__init__(self)
-        QMessageBox.about(self, "DEMO", "감정: {}\n"
+        QMessageBox.about(self, "Demo", "감정: {}\n"
                                         "원인: {}".format(sentiment.upper(), cause))
 
