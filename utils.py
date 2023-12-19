@@ -1,5 +1,6 @@
 import random
 import argparse
+from PyQt5.QtWidgets import QMainWindow, QMessageBox
 
 
 def str2bool(s):
@@ -29,3 +30,11 @@ def seed(s):
         raise argparse.ArgumentTypeError(
             "Integer value is expected. Recieved {0}".format(s)
         )
+
+
+class Sentiment_Window(QMainWindow):
+    def __init__(self, sentiment, cause):
+        QMainWindow.__init__(self)
+        QMessageBox.about(self, "DEMO", "감정: {}\n"
+                                        "원인: {}".format(sentiment.upper(), cause))
+

@@ -7,16 +7,19 @@ import logging
 import sys
 import numpy as np
 from pathlib import Path
+from PyQt5 import QtWidgets
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from bert import MAG_BertForSequenceClassification
+from transformers import BertTokenizer, BertForQuestionAnswering
 
-from argparse_utils import seed
+from utils import seed, Sentiment_Window
 from global_configs import DEVICE
 from test_loader import create_dataset
+from train_cause_model import test_cause
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--max_seq_length", type=int, default=40)
@@ -38,6 +41,7 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 args = parser.parse_args()
 
+tokenizer = BertTokenizer.from_pretrained("beomi/kcbert-base")
 
 class MultimodalConfig(object):
     def __init__(self, beta_shift, dropout_prob):
@@ -47,7 +51,7 @@ class MultimodalConfig(object):
 
 def set_up_data_loader(data_path):
     test_dataset = create_dataset(data_path)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False)
     return test_dataloader
 
 
@@ -81,15 +85,15 @@ def load_model(path):
     model = MAG_BertForSequenceClassification.from_pretrained(
         'kykim/bert-kor-base', multimodal_config=multimodal_config, num_labels=1,
     )
-    model.load_state_dict(torch.load(path))
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['model_state_dict'])
     model.to(DEVICE)
     return model
 
 
 def test(model: nn.Module, test_dataloader: DataLoader):
     model.eval()
-    preds = []
-
+    app = QtWidgets.QApplication(sys.argv)
     with torch.no_grad():
         for step, batch in enumerate(tqdm(test_dataloader, desc="Iteration")):
             acoustic = batch['audio'].to(DEVICE)
@@ -97,22 +101,32 @@ def test(model: nn.Module, test_dataloader: DataLoader):
             input_ids = batch['input_ids'].to(DEVICE)
             segment_ids = batch['segment_ids'].to(DEVICE)
             attention_mask = batch['attention_mask'].to(DEVICE)
-
+            cause_input_ids = batch['cause_input_ids'].to(DEVICE)
+            cause_attention_mask = batch['cause_attention_mask'].to(DEVICE)
+            text = batch['text']
+            print(text)
             outputs = model(input_ids, visual, acoustic.float(), attention_mask, segment_ids)
             logits = outputs[0]
-
-            logits = logits.detach().cpu().numpy()
-
-            logits = np.squeeze(logits).tolist()
-
-            preds.extend(logits)
-
-        preds = np.array(preds)
-        print("prediction:{}".format(preds))
+            cause_pred = test_cause(cause_input_ids, attention_mask=cause_attention_mask)
+            # start_pred = torch.argmax(cause_outputs['start_logits'], dim=1)
+            # end_pred = torch.argmax(cause_outputs['end_logits'], dim=1)
+            print("pred: {}".format(logits))
+            if logits < 0:
+                pred = "부정"
+            elif logits == 0:
+                pred = "중립"
+            else:
+                pred = "긍정"
+            print("********Predicted Sentiment: {}********".format(pred))
+            print("\n")
+            # cause_pred = tokenizer.decode(batch['input_ids'][0][start_pred:end_pred])
+            print("Cause Prediction: {}".format(cause_pred))
+            mainWin = Sentiment_Window(sentiment=pred, cause=cause_pred)
+            mainWin.show()
 
 
 def main(data_path, model_path):
-    set_random_seed(args.seed)
+    # set_random_seed(args.seed)
     logger.info("seed:{}".format(args.seed))
     test_data_loader = set_up_data_loader(data_path=data_path)
     model = load_model(path=model_path)
@@ -120,5 +134,5 @@ def main(data_path, model_path):
 
 
 if __name__ == "__main__":
-    main(data_path="./test_videos", model_path="./checkpoint/model_old.pt")
+    main(data_path="./test_videos", model_path="./checkpoint/model.pt")
 
