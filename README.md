@@ -12,7 +12,7 @@ First, create a folder with name "test_videos".
 
 Add videos (with file extension mp4) in the "test_videos" folder.
 
-And run:
+Finally run:
 ```bash
 python test.py
 ```
